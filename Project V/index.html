@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>V</title>
+  <style>
+    *{box-sizing:border-box}
+    
+    :root{
+      --bg-1: #061227;
+      --bg-2: #0b2340;
+      --dialog-bg: rgba(11, 23, 45, 0.95);
+      --accent: #2b6df6;
+      --text: rgba(230,238,251,0.95);
+      --text-muted: rgba(230,238,251,0.7);
+    }
+
+    html, body{
+      margin:0;
+      padding:0;
+      height:100%;
+      font-family: Inter, Arial, sans-serif;
+      background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
+      color: var(--text);
+      overflow: hidden;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    #gameContainer{
+      width:100vw;
+      height:100vh;
+      display:flex;
+      flex-direction:column;
+      position:relative;
+    }
+
+    /* Верхняя часть — фон */
+    #backgroundArea{
+      flex:1;
+      background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
+      position:relative;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--text-muted);
+      font-size:14px;
+    }
+
+    #backgroundArea img,
+    #backgroundArea video {
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+      border-radius: 8px;
+      border: 1px solid rgba(43, 109, 246, 0.4);
+      padding: 2px;
+      box-shadow: 0 0 20px rgba(43, 109, 246, 0.15);
+    }
+
+    /* Нижняя часть — диалоговое окно */
+    #dialogContainer{
+      position:relative;
+      height:160px;
+      padding:16px 24px;
+      background: var(--dialog-bg);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      display:flex;
+      flex-direction:column;
+      justify-content:flex-start;
+      gap:8px;
+    }
+
+    /* Имя персонажа */
+    #characterName{
+      font-size:14px;
+      font-weight:600;
+      color:var(--accent);
+      text-transform:uppercase;
+      letter-spacing:0.5px;
+      margin-bottom:8px;
+      height:16px;
+      line-height:16px;
+    }
+
+    /* Текст диалога */
+    #dialogText{
+      font-size:16px;
+      line-height:1.5;
+      color:var(--text);
+      word-wrap:break-word;
+      white-space:pre-wrap;
+      position:relative;
+    }
+
+    /* Белый ромб (продолжить) */
+    .continuation-diamond{
+      display:inline;
+      color:#fff;
+      animation:blink 0.8s infinite;
+    }
+
+    @keyframes blink{
+      0%, 49%{opacity:1}
+      50%, 100%{opacity:0.3}
+    }
+
+    /* Блок с выборами (справа) */
+    #choicesContainer{
+      position:fixed;
+      right:40px;
+      top:50%;
+      transform:translateY(-50%);
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      max-width:280px;
+      z-index:100;
+    }
+
+    .choice-button{
+      background:rgba(43, 109, 246, 0.1);
+      border:1px solid rgba(43, 109, 246, 0.4);
+      color:var(--text);
+      padding:12px 16px;
+      font-size:14px;
+      border-radius:6px;
+      cursor:pointer;
+      transition:all 0.2s ease;
+      text-align:left;
+      line-height:1.4;
+      max-width:280px;
+      word-wrap:break-word;
+    }
+
+    .choice-button:hover{
+      background:rgba(43, 109, 246, 0.3);
+      border-color:var(--accent);
+      color:#e6eefb;
+      transform:translateX(-4px);
+    }
+
+    .choice-button:active{
+      transform:translateX(-2px) scale(0.98);
+    }
+
+    /* Клик на диалог для продолжения */
+    #dialogContainer.clickable{
+      cursor:pointer;
+    }
+
+    #dialogContainer.clickable:hover{
+      background: rgba(11, 23, 45, 0.98);
+    }
+
+    /* Скрытые элементы */
+    .hidden{
+      display:none !important;
+    }
+
+    /* === СТИЛИ ДЛЯ СИСТЕМНОЙ ОШИБКИ === */
+    #errorOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      z-index: 10000;
+      display: none;
+      align-items: flex-start;
+      justify-content: flex-start;
+      padding: 40px;
+    }
+
+    #errorOverlay.active {
+      display: flex;
+    }
+
+    #terminal {
+      background: transparent;
+      padding: 0;
+      max-width: 90%;
+      max-height: none;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #00ff00;
+      overflow-y: visible;
+      line-height: 1.8;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+
+    .terminal-line {
+      display: block;
+      min-height: 20px;
+      margin: 2px 0;
+    }
+
+    .terminal-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 12px;
+      background: #00ff00;
+      margin-left: 4px;
+      animation: terminalBlink 0.7s infinite;
+    }
+
+    .terminal-cursor.done {
+      animation: none;
+      opacity: 0;
+    }
+
+    @keyframes terminalBlink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+
+    #errorMessage {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(11, 23, 45, 0.95);
+      border: 1px solid rgba(43, 109, 246, 0.4);
+      border-radius: 8px;
+      padding: 32px;
+      max-width: 400px;
+      text-align: center;
+      color: var(--text);
+      z-index: 10001;
+      display: none;
+      font-size: 16px;
+      line-height: 1.6;
+      box-shadow: 0 0 30px rgba(43, 109, 246, 0.2);
+    }
+
+    #errorMessage.show {
+      display: block;
+      animation: fadeIn 0.5s;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    #blackScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      z-index: 10002;
+      display: none;
+    }
+
+    #blackScreen.active {
+      display: block;
+    }
+
+    #loadingIndicator {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      font-size: 14px;
+      color: var(--text-muted);
+      z-index: 50;
+      font-family: 'Courier New', monospace;
+      display: none;
+    }
+
+    #loadingIndicator.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="gameContainer">
+    <div id="backgroundArea">
+      <!-- фон с изображением/видео -->
+    </div>
+    <div id="dialogContainer">
+      <div id="characterName"></div>
+      <div id="dialogText"></div>
+    </div>
+  </div>
+
+  <div id="choicesContainer"></div>
+
+  <!-- Экран системной ошибки -->
+  <div id="errorOverlay">
+    <div id="terminal"></div>
+    <div id="errorMessage"></div>
+  </div>
+  <div id="blackScreen"></div>
+
+  <!-- Loading индикатор -->
+  <div id="loadingIndicator"></div>
+
+  <script>
+    (function(){
+      // === КОНФИГ СЦЕН ===
+      const scenes = [
+        {
+          id: 0,
+          character: 'Система',
+          text: 'Рекомендуется проходить в полноэкранном режиме.\nДля этого нажмите клавишу F11.',
+          choices: [],
+          background: null,
+          next: 1
+        },
+        {
+          id: 1,
+          character: 'Рустам',
+          text: 'амм..\nЭлячка, у меня к тебе вопрос 👉👈',
+          choices: [
+            { text: 'эъ?', next: 2 }
+          ],
+          background: 'Source/chibidoki.mp4',
+          imageSize: { width: '380px' }
+        },
+        {
+          id: 2,
+          character: 'Рустам',
+          text: 'Будешь моей валентинкой?',
+          choices: [
+            { text: 'ДА! КОНЕЧНО!', next: 3 },
+            { text: 'ню неее', next: 'error' }
+          ],
+          background: 'Source/ENA/ENA2.webm',
+          imageSize: { width: '380px' }
+        },
+        {
+          id: 3,
+          character: 'Рустам',
+          text: 'ЙААААА СПАСИБО ЧТО ТЫ ЕСТЬ У МЕНЯ <3',
+          choices: [],
+          background: 'Source/ENA/ENA HE.mp4',
+          loop: false,
+          imageSize: { width: '380px' }
+        },
+        {
+          id: 4,
+          character: 'Рустам',
+          text: 'Будешь моей валентинкой?',
+          choices: [
+            { text: 'ДА! КОНЕЧНО!', next: 3 },
+            { text: 'ню неее', next: 'error' }
+          ],
+          background: 'Source/ENA/ENA2.webm',
+          imageSize: { width: '380px' },
+          skipLoading: true
+        },
+        {
+          id: 5,
+          character: 'Рустам',
+          text: 'Будешь моей валентинкой?',
+          choices: [
+            { text: 'ДА! КОНЕЧНО!', next: 3 }
+          ],
+          background: 'Source/ENA/ENA2.webm',
+          imageSize: { width: '380px' },
+          skipLoading: true
+        }
+      ];
+
+      let currentSceneIndex = 0;
+      let isTextShowing = false;
+      let textCompleted = false;
+      let previousSceneIndex = 0;
+      let scene2FirstVisit = true;
+      let loadingInterval = null;
+
+      const gameContainer = document.getElementById('gameContainer');
+      const backgroundArea = document.getElementById('backgroundArea');
+      const dialogContainer = document.getElementById('dialogContainer');
+      const characterNameEl = document.getElementById('characterName');
+      const dialogTextEl = document.getElementById('dialogText');
+      const choicesContainer = document.getElementById('choicesContainer');
+      const errorOverlay = document.getElementById('errorOverlay');
+      const terminal = document.getElementById('terminal');
+      const errorMessage = document.getElementById('errorMessage');
+      const blackScreen = document.getElementById('blackScreen');
+      const loadingIndicator = document.getElementById('loadingIndicator');
+
+      // === ФУНКЦИИ ===
+
+      // Очистить фон
+      function clearBackground() {
+        backgroundArea.innerHTML = '';
+      }
+
+      // Выставить фон
+      function setBackground(backgroundPath, shouldLoop = true, imageSize = {}) {
+        clearBackground();
+        if (!backgroundPath) return;
+
+        if (backgroundPath.endsWith('.mp4') || backgroundPath.endsWith('.webm')) {
+          const video = document.createElement('video');
+          video.src = backgroundPath;
+          video.autoplay = true;
+          video.loop = shouldLoop;
+          video.muted = true;
+          video.playsInline = true;
+          if (imageSize.width) video.style.width = imageSize.width;
+          if (imageSize.height) video.style.height = imageSize.height;
+          backgroundArea.appendChild(video);
+        } else {
+          const img = document.createElement('img');
+          img.src = backgroundPath;
+          if (imageSize.width) img.style.width = imageSize.width;
+          if (imageSize.height) img.style.height = imageSize.height;
+          backgroundArea.appendChild(img);
+        }
+      }
+
+      // Эффект печатной машинки
+      function typeText(text, speed = 30) {
+        return new Promise((resolve) => {
+          let index = 0;
+          dialogTextEl.textContent = '';
+          isTextShowing = true;
+          textCompleted = false;
+
+          function type() {
+            if (index < text.length) {
+              dialogTextEl.textContent += text[index];
+              index++;
+              setTimeout(type, speed);
+            } else {
+              isTextShowing = false;
+              textCompleted = true;
+              // Добавляем ромб прямо в конец текста
+              const diamond = document.createElement('span');
+              diamond.className = 'continuation-diamond';
+              diamond.textContent = ' ◆';
+              dialogTextEl.appendChild(diamond);
+              resolve();
+            }
+          }
+
+          type();
+        });
+      }
+
+      // === ФУНКЦИИ ДЛЯ LOADING ИНДИКАТОРА ===
+
+      function startLoadingAnimation() {
+        loadingIndicator.classList.add('show');
+        const states = ['loading', 'loading.', 'loading..', 'loading...', 'loading..', 'loading.'];
+        let stateIndex = 0;
+
+        loadingInterval = setInterval(() => {
+          loadingIndicator.textContent = states[stateIndex];
+          stateIndex = (stateIndex + 1) % states.length;
+        }, 1000);
+      }
+
+      function stopLoadingAnimation() {
+        if (loadingInterval) {
+          clearInterval(loadingInterval);
+          loadingInterval = null;
+        }
+        loadingIndicator.classList.remove('show');
+      }
+
+      // === ФУНКЦИИ ДЛЯ СИСТЕМНОЙ ОШИБКИ ===
+
+      function generateGarbledText() {
+        const chars = '%$#@!_??~^&*()[]{}|-\\:;";\'<>,.?/';
+        let result = '';
+        for (let i = 0; i < 15; i++) {
+          result += chars[Math.floor(Math.random() * chars.length)];
+        }
+        return result;
+      }
+
+      function addTerminalLine(text, delay = 0, isGarbled = false) {
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            const line = document.createElement('span');
+            line.className = 'terminal-line' + (isGarbled ? ' garbled' : '');
+            line.textContent = text;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+            resolve();
+          }, delay);
+        });
+      }
+
+      // Печать символов внутри строки терминала с мигающим курсором
+      async function typeTerminalLine(text, pauseAfter = 0, textColor = '#00ff00', redStartIndex = -1) {
+        const line = document.createElement('div');
+        line.className = 'terminal-line';
+
+        const prompt = document.createElement('span');
+        prompt.style.color = '#00ff00';
+        prompt.style.fontWeight = 'bold';
+        prompt.textContent = '— ';
+        line.appendChild(prompt);
+
+        const textSpan = document.createElement('span');
+        line.appendChild(textSpan);
+
+        // Создаём контейнер для разноцветного текста
+        let currentColor = textColor;
+        let currentSpan = document.createElement('span');
+        currentSpan.style.color = currentColor;
+        textSpan.appendChild(currentSpan);
+
+        const cursor = document.createElement('span');
+        cursor.className = 'terminal-cursor';
+        line.appendChild(cursor);
+
+        terminal.appendChild(line);
+        terminal.scrollTop = terminal.scrollHeight;
+
+        // Печать текста по символам с мигающим курсором
+        for (let i = 0; i < text.length; i++) {
+          // Если достигли позиции, где нужно изменить цвет
+          if (i === redStartIndex && redStartIndex >= 0) {
+            currentColor = '#ff0000';
+            currentSpan = document.createElement('span');
+            currentSpan.style.color = currentColor;
+            textSpan.appendChild(currentSpan);
+          }
+
+          currentSpan.textContent += text[i];
+          await new Promise(resolve => setTimeout(resolve, 15));
+        }
+
+        // Удаляем мигание курсора после печати
+        cursor.classList.add('done');
+
+        // Если нужна пауза после этой строки
+        if (pauseAfter > 0) {
+          await new Promise(resolve => setTimeout(resolve, pauseAfter));
+        }
+
+        return new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      async function showSystemError(errorType = 1) {
+        // Запоминаем сцену, где произошла ошибка
+        const errorSceneIndex = currentSceneIndex;
+
+        // Скрываем обычный интерфейс
+        gameContainer.style.display = 'none';
+        choicesContainer.style.display = 'none';
+
+        if (errorType === 1) {
+          // Показываем чёрный экран перед ошибкой
+          blackScreen.classList.add('active');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          blackScreen.classList.remove('active');
+
+          // Показываем оверлей ошибки с новой последовательностью
+          errorOverlay.classList.add('active');
+          terminal.innerHTML = '';
+          errorMessage.textContent = '';
+          errorMessage.classList.remove('show');
+
+          // Новая последовательность терминала
+          const terminalLines = [
+            { text: 'инициализация проверки стабильности сценария...', pause: 1000, color: '#00ff00', redStartIndex: -1 },
+            { text: 'проверка состояния диалогового модуля...', pause: 1000, color: '#00ff00', redStartIndex: -1 },
+            { text: 'синхронизация текущей точки сохранения...', pause: 0, color: '#00ff00', redStartIndex: -1 },
+            { text: 'обнаружено отклонение от ожидаемого сценария', pause: 0, color: '#00ff00', redStartIndex: -1 },
+            { text: 'классификация отклонения...', pause: 2000, color: '#00ff00', redStartIndex: -1 },
+            { text: 'статус: %$#@ERROR#%', pause: 0, color: '#00ff00', redStartIndex: 8 },
+            { text: 'предупреждение: обнаружена нестабильная ветка диалога', pause: 0, color: '#00ff00', redStartIndex: 16 },
+            { text: 'выполнение стандартного протокола восстановления...', pause: 2000, color: '#00ff00', redStartIndex: -1 },
+            { text: 'поиск последней стабильной точки сохранения...', pause: 1000, color: '#00ff00', redStartIndex: -1 }
+          ];
+
+          // Печатаем все строки терминала
+          for (const line of terminalLines) {
+            await typeTerminalLine(line.text, line.pause, line.color, line.redStartIndex);
+          }
+
+          // Краткая пауза перед чёрным экраном
+          await new Promise(resolve => setTimeout(resolve, 300));
+
+          // Скрываем оверлей и показываем чёрный экран на 3 секунды
+          errorOverlay.classList.remove('active');
+          // Показываем gameContainer с чёрным фоном и диалогом внизу (как в новелле)
+          gameContainer.style.display = 'flex';
+          backgroundArea.style.background = '#000';
+          backgroundArea.innerHTML = '';
+          choicesContainer.style.display = 'none';
+          loadingIndicator.classList.remove('show');
+          loadingIndicator.textContent = '';
+
+          characterNameEl.textContent = 'СИСТЕМА';
+          
+          // Используем gradual typing эффект как в основной новелле
+          await typeText('Упс. Произошла непредвиденная ошибка.\nВыполняется возврат к последней точке сохранения...');
+
+          // Делаем диалог кликабельным
+          dialogContainer.style.cursor = 'pointer';
+
+          // Ждём клика по диалогу
+          dialogContainer.addEventListener('click', async function onClick() {
+            dialogContainer.removeEventListener('click', onClick);
+            characterNameEl.textContent = '';
+            dialogTextEl.innerHTML = '';
+            gameContainer.style.display = 'none';
+            backgroundArea.style.background = '';
+            loadingIndicator.classList.remove('show');
+            loadingIndicator.textContent = '';
+            blackScreen.classList.add('active');
+            // Чёрный экран ещё 2 секунды
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            blackScreen.classList.remove('active');
+            gameContainer.style.display = 'flex';
+            choicesContainer.style.display = 'flex';
+            scene2FirstVisit = true;
+            renderScene(4);
+          });
+
+        } else if (errorType === 2) {
+          // Ошибка 2: чёрный экран, терминал с новой последовательностью, диалог, тем сцена 5
+          blackScreen.classList.add('active');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          blackScreen.classList.remove('active');
+
+          errorOverlay.classList.add('active');
+          errorOverlay.style.backgroundImage = 'url(Source/Monika/Monika%20dark.jpg)';
+          errorOverlay.style.backgroundSize = 'cover';
+          errorOverlay.style.backgroundPosition = 'center';
+          errorOverlay.style.backgroundRepeat = 'no-repeat';
+          errorOverlay.style.backgroundAttachment = 'fixed';
+          terminal.innerHTML = '';
+
+          // Новая последовательность терминала для ошибки 2
+          const terminalLines2 = [
+            { text: 'инициализация проверки стабильности сценария...', pause: 1000, color: '#00ff00', redStartIndex: -1 },
+            { text: 'обнаружено повторное отклонение', pause: 0, color: '#00ff00', redStartIndex: -1 },
+            { text: '', pause: 0, color: '#00ff00', redStartIndex: -1 },
+            { text: 'предупреждение: обнаружен несовместимый ответ', pause: 0, color: '#00ff00', redStartIndex: -1 },
+            { text: 'ответ приводит к критической нестабильности сценария', pause: 1000, color: '#00ff00', redStartIndex: -1 },
+            { text: 'поиск допустимых альтернатив...', pause: 2000, color: '#00ff00', redStartIndex: -1 },
+            { text: '', pause: 0, color: '#00ff00', redStartIndex: -1 },
+            { text: 'пересборка набора допустимых ответов...', pause: 3000, color: '#00ff00', redStartIndex: -1 },
+            { text: '', pause: 0, color: '#00ff00', redStartIndex: -1 },
+            { text: 'response_vector_corrupted', pause: 0, color: '#00ff00', redStartIndex: -1 },
+            { text: 'removing incompatible response...', pause: 0, color: '#00ff00', redStartIndex: -1 },
+            { text: 'incompatible response removed', pause: 0, color: '#00ff00', redStartIndex: -1 }
+          ];
+
+          for (const line of terminalLines2) {
+            if (line.text === '') {
+              // Пустая строка
+              const emptyLine = document.createElement('div');
+              emptyLine.className = 'terminal-line';
+              terminal.appendChild(emptyLine);
+              terminal.scrollTop = terminal.scrollHeight;
+            } else {
+              await typeTerminalLine(line.text, line.pause, line.color, line.redStartIndex);
+            }
+          }
+
+          // Краткая пауза
+          await new Promise(resolve => setTimeout(resolve, 300));
+
+          // Скрываем оверлей и показываем gameContainer с диалогом
+          errorOverlay.classList.remove('active');
+          gameContainer.style.display = 'flex';
+          backgroundArea.style.background = '#000';
+          backgroundArea.innerHTML = '';
+          choicesContainer.style.display = 'none';
+          loadingIndicator.classList.remove('show');
+          loadingIndicator.textContent = '';
+
+          characterNameEl.textContent = 'СИСТЕМА';
+          await typeText('...');
+
+          // Делаем диалог кликабельным
+          dialogContainer.style.cursor = 'pointer';
+
+          // Ждём клика по диалогу
+          dialogContainer.addEventListener('click', async function onClick() {
+            dialogContainer.removeEventListener('click', onClick);
+            characterNameEl.textContent = '';
+            dialogTextEl.innerHTML = '';
+            gameContainer.style.display = 'none';
+            backgroundArea.style.background = '';
+            blackScreen.classList.add('active');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            blackScreen.classList.remove('active');
+            gameContainer.style.display = 'flex';
+            choicesContainer.style.display = 'flex';
+            renderScene(5);
+          });
+        }
+      }
+
+      // Отобразить текущую сцену
+      async function renderScene(sceneIndex) {
+        const scene = scenes[sceneIndex];
+        if (!scene) return;
+
+        // Остановим loading если переходим на другую сцену
+        if (currentSceneIndex === 2 && sceneIndex !== 2) {
+          stopLoadingAnimation();
+        }
+
+        // Сохраняем предыдущую сцену и переходим на новую
+        previousSceneIndex = currentSceneIndex;
+        currentSceneIndex = sceneIndex;
+
+        // Очищаем выборы
+        choicesContainer.innerHTML = '';
+
+        // Показываем имя персонажа
+        characterNameEl.textContent = scene.character || '';
+
+        // Показываем фон (loop по умолчанию true)
+        const shouldLoop = scene.loop !== false;
+        const imageSize = scene.imageSize || {};
+        setBackground(scene.background, shouldLoop, imageSize);
+
+        // Эффект печатной машинки
+        await typeText(scene.text);
+
+        // Специальная логика для сцены 2 - loading анимация при первом визите
+        if (sceneIndex === 2 && scene2FirstVisit && !scene.skipLoading) {
+          scene2FirstVisit = false;
+          startLoadingAnimation();
+        }
+
+        // Если выборов нет — клик на диалог продолжит сцену
+        if (scene.choices.length === 0) {
+          dialogContainer.classList.add('clickable');
+          dialogContainer.addEventListener('click', handleDialogClick, { once: true });
+        } else {
+          // Если есть выборы — показываем их
+          renderChoices(scene.choices);
+        }
+      }
+
+      // Обработка клика на диалог
+      async function handleDialogClick() {
+        dialogContainer.classList.remove('clickable');
+        if (textCompleted) {
+          // Специальная обработка для сцены 5 (экран уведомления системы)
+          if (currentSceneIndex === 5) {
+            gameContainer.style.display = 'none';
+            choicesContainer.style.display = 'none';
+            blackScreen.classList.add('active');
+
+            // Чёрный экран длится 3 секунды
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            // Возвращаемся на сцену 4 (экран 2.1)
+            blackScreen.classList.remove('active');
+            gameContainer.style.display = 'flex';
+            choicesContainer.style.display = 'flex';
+
+            renderScene(4);
+          } else {
+            const nextScene = scenes[currentSceneIndex].next;
+            if (nextScene !== undefined) {
+              renderScene(nextScene);
+            }
+          }
+        }
+      }
+
+      // Отобразить выборы
+      function renderChoices(choices) {
+        choicesContainer.innerHTML = '';
+        choices.forEach((choice, index) => {
+          const btn = document.createElement('button');
+          btn.className = 'choice-button';
+          btn.textContent = choice.text;
+          btn.addEventListener('click', () => {
+            // Проверяем если это ошибка или специальный выбор
+            if (choice.next === 'error') {
+                // Различаем тип ошибки по текущему экрану
+                if (currentSceneIndex === 2) {
+                  showSystemError(1);
+                } else if (currentSceneIndex === 4) {
+                  showSystemError(2);
+                } else {
+                  showSystemError(1);
+                }
+            } else if (choice.next !== undefined) {
+              renderScene(choice.next);
+            }
+          });
+          choicesContainer.appendChild(btn);
+        });
+      }
+
+      // Запуск
+      renderScene(currentSceneIndex);
+    })();
+  </script>
+
+</body>
+</html>
